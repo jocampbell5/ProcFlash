@@ -300,6 +300,11 @@ function PA:NewIcon(i)
     tex:SetPoint("BOTTOMRIGHT", -2, 2)
     tex:SetTexCoord(0.07, 0.93, 0.07, 0.93)           -- trim the icon's own border
     b.tex = tex
+    -- the proc's name under the icon, so "Revenge" says Revenge
+    local name = b:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    name:SetPoint("TOP", b, "BOTTOM", 0, -3)
+    name:SetTextColor(0.85, 0.85, 0.88)               -- silver
+    b.name = name
     b:Hide()
     self.icons[i] = b
     return b
@@ -341,6 +346,16 @@ function PA:Moving()
     return self.optionsOpen or self.editing or not self.db.locked
 end
 
+---Set the name under an icon, its letters sized to the icon (at least 10 pt).
+local function NameText(fs, text, size)
+    fs:SetText(text)
+    if fs.size ~= size then
+        fs.size = size
+        local font = GameFontNormal and GameFontNormal.GetFont and GameFontNormal:GetFont()
+        if font then fs:SetFont(font, math.max(10, math.floor(size * 0.3 + 0.5)), "OUTLINE") end
+    end
+end
+
 ---Show the proc that's up, in the one spot. Procs rarely overlap; if two are up
 ---at once, the first in the list wins (for warriors: Overpower, Revenge, Execute).
 function PA:Update()
@@ -365,6 +380,7 @@ function PA:Update()
             b:SetSize(size, size)
             b:ClearAllPoints()
             b:SetPoint("TOPLEFT", anchor, "TOPLEFT", 0, 0)
+            NameText(b.name, b.proc.name, size)
             b.tex:SetDesaturated(false)
             if moving or b.proc.buff or InRange(b.proc.spell) then b.tex:SetVertexColor(1, 1, 1)
             else b.tex:SetVertexColor(1, 0.3, 0.3) end   -- red: step closer

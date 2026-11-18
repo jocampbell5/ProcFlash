@@ -15,7 +15,7 @@ No icon means there's nothing to react to. When the icon appears, press that but
 
 Moves only show when you can actually press them: you know the move, you're in the right stance,
 you have the rage, it's off cooldown, and you have a live enemy targeted. A red-tinted icon means the
-target is out of reach. Every proc shows in the same spot; if two happen to be up at once,
+target is out of reach. The proc's name shows under its icon in silver. Every proc shows in the same spot; if two happen to be up at once,
 the one listed first above shows.
 
 Other classes, and characters without any of these, see nothing.

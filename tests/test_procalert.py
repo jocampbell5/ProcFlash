@@ -65,6 +65,8 @@ function Stub:GetPoint() local p = self.point; return p[1], p[2], p[3], p[4], p[
 function Stub:SetVertexColor(r, g, b) self.color = { r, g, b } end
 function Stub:SetTexture(t) self.texture = t end
 function Stub:SetText(t) self.text = t end
+function Stub:SetFont(path, size, flags) self.font = { path, size, flags } end
+function Stub:SetTextColor(r, g, b) self.textColor = { r, g, b } end
 function Stub:SetDesaturated(d) self.grey = d end
 function Stub:EnableMouse(on) self.mouse = on end
 function Stub:CreateTexture() return Stub.new("Texture") end
@@ -191,6 +193,21 @@ def test_nothing_shows_until_a_move_lights_up():
     W.usable[OVERPOWER] = False                 # used, or the 5 seconds ran out
     g.tick()
     assert g.showing() == ""
+
+
+def test_the_icon_says_the_procs_name():
+    lua, g, W = game()
+    lua.execute('GameFontNormal = { GetFont = function() return "Fonts/FRIZQT__.TTF", 12 end }')
+    W.usable[REVENGE] = True
+    g.tick()
+    icon = g.ProcAlert.icons[2]
+    assert g.showing() == "Revenge"
+    assert icon.name.text == "Revenge"
+    assert list(icon.name.textColor.values()) == [0.85, 0.85, 0.88]   # silver
+    assert icon.name.font[2] == 14              # 48 px icon: 14 pt letters
+    g.slash("size 100")
+    g.tick()
+    assert icon.name.font[2] == 30              # bigger icon, bigger name
 
 
 def test_every_proc_shows_in_the_same_spot_one_at_a_time():
