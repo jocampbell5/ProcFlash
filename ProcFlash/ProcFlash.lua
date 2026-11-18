@@ -1,4 +1,4 @@
--- ProcAlert: no icon means there is nothing to react to. When a proc happens,
+-- ProcFlash: no icon means there is nothing to react to. When a proc happens,
 -- its icon appears where you placed it, and goes away once it's used or gone.
 -- Two kinds of procs:
 --   * moves that light up now and then: Overpower after the target dodges,
@@ -12,10 +12,10 @@
 -- are the modern ones (C_Spell, C_SpellBook), and in combat some answers come
 -- back "secret" (addons may pass them on but not look at them). Every answer
 -- goes through Plain(), which turns a secret into nil = "don't know".
--- Placing the icons: type /proc for the ProcAlert window (Edit Mode works too).
+-- Placing the icons: type /procflash for the ProcFlash window (Edit Mode works too).
 local ADDON, PA = ...
 PA = PA or {}
-_G.ProcAlert = PA
+_G.ProcFlash = PA
 
 -- move = rank 1 of a move that lights up; buff = the buff's spell id.
 -- The name is the English one, used if the game can't tell us its own.
@@ -55,10 +55,10 @@ local QUESTION_MARK = 134400
 local unpack = unpack or table.unpack
 
 local function Say(msg)
-    DEFAULT_CHAT_FRAME:AddMessage("|cffffd100ProcAlert|r: " .. msg)
+    DEFAULT_CHAT_FRAME:AddMessage("|cffffd100ProcFlash|r: " .. msg)
 end
 
--- WoW hides addon errors unless you turn them on, so ProcAlert says them in
+-- WoW hides addon errors unless you turn them on, so ProcFlash says them in
 -- chat itself (each one once, not 20 times a second).
 local reported = {}
 local function Report(err)
@@ -204,11 +204,13 @@ local function HasBuff(proc)
         if issecret(aura) then return true end
         if aura then return true end
     end
+    -- Scanning the buff list by index is only a fallback for a buff whose id differs.
+    -- In combat the client hides the list and the call errors, so stop at the first error.
     for i = 1, 40 do
         local name, spellId
         if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
-            local aura = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
-            if not aura then return false end
+            local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
+            if not ok or not aura or issecret(aura) then return false end
             name, spellId = Plain(aura.name), Plain(aura.spellId)
         elseif UnitBuff then
             local n, _, _, _, _, _, _, _, _, sid = UnitBuff("player", i)
@@ -237,7 +239,7 @@ end
 ---------------------------------------------------------------------------
 PA.icons, PA.known = {}, {}
 
-local anchor = CreateFrame("Frame", "ProcAlertFrame", UIParent)
+local anchor = CreateFrame("Frame", "ProcFlashFrame", UIParent)
 PA.anchor = anchor
 anchor:SetMovable(true)
 anchor:SetClampedToScreen(true)
@@ -341,7 +343,7 @@ function PA:Rebuild()
     self:Update()
 end
 
----Placing the icons: the /proc window or Edit Mode is open, or /proc move.
+---Placing the icons: the /procflash window or Edit Mode is open, or /procflash move.
 function PA:Moving()
     return self.optionsOpen or self.editing or not self.db.locked
 end
@@ -398,9 +400,9 @@ function PA:Update()
     anchor:EnableMouse(moving)
     anchor:EnableMouseWheel(moving)
     if moving then
-        if self.optionsOpen then label:SetText("ProcAlert: drag to move, scroll to resize")
-        elseif self.editing then label:SetText("ProcAlert")
-        else label:SetText("ProcAlert: drag me, then type /proc lock") end
+        if self.optionsOpen then label:SetText("ProcFlash: drag to move, scroll to resize")
+        elseif self.editing then label:SetText("ProcFlash")
+        else label:SetText("ProcFlash: drag me, then type /procflash lock") end
         backdrop:Show() label:Show()
     else
         backdrop:Hide() label:Hide()
@@ -445,7 +447,7 @@ if EventRegistry and EventRegistry.RegisterCallback then
 end
 
 ---------------------------------------------------------------------------
--- The /proc window. While it's open the icon box is on screen to drag
+-- The /procflash window. While it's open the icon box is on screen to drag
 -- and resize; closing it locks the box again.
 ---------------------------------------------------------------------------
 local DIALOG = {
@@ -487,7 +489,7 @@ local function Button(parent, text, width, onClick)
 end
 
 function PA:BuildOptions()
-    local f = CreateFrame("Frame", "ProcAlertOptions", UIParent, BACKDROP_TEMPLATE)
+    local f = CreateFrame("Frame", "ProcFlashOptions", UIParent, BACKDROP_TEMPLATE)
     f:Hide()
     f:SetSize(290, 260)
     f:SetPoint("CENTER", UIParent, "CENTER", 0, 140)
@@ -499,9 +501,9 @@ function PA:BuildOptions()
     f:SetScript("OnDragStart", function(self) self:StartMoving() end)
     f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
     if f.SetBackdrop then f:SetBackdrop(DIALOG) end
-    if UISpecialFrames then table.insert(UISpecialFrames, "ProcAlertOptions") end   -- Esc closes it
+    if UISpecialFrames then table.insert(UISpecialFrames, "ProcFlashOptions") end   -- Esc closes it
 
-    local title = Text(f, "GameFontNormalLarge", "ProcAlert")
+    local title = Text(f, "GameFontNormalLarge", "ProcFlash")
     title:SetPoint("TOP", 0, -18)
     local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -6, -6)
@@ -514,7 +516,7 @@ function PA:BuildOptions()
 
     local sizeLabel = Text(f, "GameFontNormal", "Icon size")
     sizeLabel:SetPoint("TOPLEFT", 24, -86)
-    local slider = CreateFrame("Slider", "ProcAlertSizeSlider", f, BACKDROP_TEMPLATE)
+    local slider = CreateFrame("Slider", "ProcFlashSizeSlider", f, BACKDROP_TEMPLATE)
     slider:SetOrientation("HORIZONTAL")
     slider:SetSize(140, 17)
     slider:SetPoint("LEFT", sizeLabel, "RIGHT", 12, 0)
@@ -533,7 +535,7 @@ function PA:BuildOptions()
     f.checks = {}
     f.sound = Checkbox(f, function(_, on) PA.db.sound = on end)
     f.sound.label:SetText("Play a sound when an icon appears")
-    f.none = Text(f, "GameFontDisable", "This character has none of the procs\nProcAlert watches.")
+    f.none = Text(f, "GameFontDisable", "This character has none of the procs\nProcFlash watches.")
 
     f.reset = Button(f, "Reset position", 120, function()
         PA.db.point, PA.db.size = { unpack(DEFAULTS.point) }, DEFAULTS.size
@@ -606,7 +608,7 @@ function PA:ToggleOptions()
 end
 
 ---------------------------------------------------------------------------
--- /proc
+-- /procflash
 ---------------------------------------------------------------------------
 local function KnownNames()
     local names = {}
@@ -616,7 +618,7 @@ local function KnownNames()
     return table.concat(names, ", ")
 end
 
-local NOTHING = "this character has none of the procs ProcAlert watches."
+local NOTHING = "this character has none of the procs ProcFlash watches."
 
 local function Shown(v)
     if issecret(v) then return "secret" end
@@ -665,13 +667,13 @@ function PA:Command(msg)
     if word == "debug" then return self:Debug() end
     if word == "" or word == "options" or word == "config" then return self:ToggleOptions() end
     if #self.known == 0 then
-        Say(NOTHING .. " (/proc debug shows what the game reports.)")
+        Say(NOTHING .. " (/procflash debug shows what the game reports.)")
         return
     end
 
     if word == "move" or word == "unlock" then
         db.locked = false
-        Say("drag the icons where you want them, then type /proc lock.")
+        Say("drag the icons where you want them, then type /procflash lock.")
     elseif word == "lock" then
         db.locked, db.placed = true, true
         Say("locked. Icons now only show up when a proc is up.")
@@ -680,7 +682,7 @@ function PA:Command(msg)
         if n and n >= MIN_SIZE and n <= MAX_SIZE then
             Say("icons are now " .. self:SetIconSize(n) .. " pixels.")
         else
-            Say("size is a number from 16 to 200, e.g. /proc size 64 (now " .. db.size .. ").")
+            Say("size is a number from 16 to 200, e.g. /procflash size 64 (now " .. db.size .. ").")
         end
     elseif word == "sound" then
         db.sound = not db.sound
@@ -693,9 +695,9 @@ function PA:Command(msg)
         Say("back in the middle of the screen at the normal size.")
     elseif word == "help" then
         Say("watching " .. KnownNames() .. ".")
-        Say("/proc - the ProcAlert window: move, resize, turn procs on or off")
-        Say("/proc size 64   /proc sound   /proc reset   /proc <name> (e.g. /proc revenge)")
-        Say("/proc move, /proc lock - move it without the window   /proc debug")
+        Say("/procflash - the ProcFlash window: move, resize, turn procs on or off")
+        Say("/procflash size 64   /procflash sound   /procflash reset   /procflash <name> (e.g. /procflash revenge)")
+        Say("/procflash move, /procflash lock - move it without the window   /procflash debug")
     else
         for _, proc in ipairs(self.known) do
             if proc.key == msg or proc.name:lower() == msg then
@@ -706,15 +708,14 @@ function PA:Command(msg)
                 return
             end
         end
-        Say("nothing called \"" .. msg .. "\". Watching " .. KnownNames() .. ". Type /proc for help.")
+        Say("nothing called \"" .. msg .. "\". Watching " .. KnownNames() .. ". Type /procflash for help.")
         return
     end
     self:Update()
 end
 
-SLASH_PROCALERT1 = "/proc"
-SLASH_PROCALERT2 = "/procalert"
-SlashCmdList.PROCALERT = Safely(function(msg)
+SLASH_PROCFLASH1 = "/procflash"
+SlashCmdList.PROCFLASH = Safely(function(msg)
     if not PA.db then
         Say("didn't finish loading. Type /reload; if this keeps happening, look for a red error above.")
         return
@@ -729,19 +730,19 @@ local events = CreateFrame("Frame")
 events:SetScript("OnEvent", Safely(function(_, event, arg)
     if event == "ADDON_LOADED" then
         if arg ~= ADDON then return end
-        ProcAlertDB = ProcAlertDB or {}
-        local db = ProcAlertDB
+        ProcFlashDB = ProcFlashDB or {}
+        local db = ProcFlashDB
         for k, v in pairs(DEFAULTS) do
             if db[k] == nil then db[k] = type(v) == "table" and { unpack(v) } or v end
         end
         db.off = db.off or {}
-        if not db.placed then db.locked = true end    -- placing it is the /proc window's job now
+        if not db.placed then db.locked = true end    -- placing it is the /procflash window's job now
         PA.db = db
         PA:Place()
     elseif event == "PLAYER_LOGIN" then
         PA:Rebuild()
         if #PA.known > 0 and not PA.db.placed then
-            Say("type /proc to place the icons and set them up.")
+            Say("type /procflash to place the icons and set them up.")
         end
     elseif PA.db then
         PA:Rebuild()                                  -- learned a spell or a talent

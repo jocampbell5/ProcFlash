@@ -1,4 +1,4 @@
-# ProcAlert
+# ProcFlash
 
 A WoW Forever addon that shows an icon the moment a proc is up, and nothing the rest of the time.
 No icon means there's nothing to react to. When the icon appears, press that button.
@@ -22,7 +22,7 @@ Other classes, and characters without any of these, see nothing.
 
 ## Setting it up
 
-Type `/proc`. The ProcAlert window opens, and a blue box with an icon appears on screen.
+Type `/procflash`. The ProcFlash window opens, and a blue box with an icon appears on screen.
 
 - **Move it:** drag the blue box.
 - **Size:** use the slider, or scroll the mouse wheel over the box.
@@ -37,21 +37,25 @@ Typed commands do the same things:
 
 | Command | Does |
 |---------|------|
-| `/proc` | open or close the window |
-| `/proc help` | what it's watching, and these commands |
-| `/proc size 64` | icon size in pixels (16–200, normally 48) |
-| `/proc sound` | sound on or off |
-| `/proc revenge` | turn one off or back on (any name from the table) |
-| `/proc reset` | back to the middle of the screen at the normal size |
-| `/proc move`, `/proc lock` | move the box without the window |
-| `/proc debug` | what the game reports for each proc, if one isn't showing when it should |
+| `/procflash` | open or close the window |
+| `/procflash help` | what it's watching, and these commands |
+| `/procflash size 64` | icon size in pixels (16–200, normally 48) |
+| `/procflash sound` | sound on or off |
+| `/procflash revenge` | turn one off or back on (any name from the table) |
+| `/procflash reset` | back to the middle of the screen at the normal size |
+| `/procflash move`, `/procflash lock` | move the box without the window |
+| `/procflash debug` | what the game reports for each proc, if one isn't showing when it should |
 
 The position and settings are shared by all your characters.
 
 ## Install
 
-Copy the `ProcAlert` folder into `World of Warcraft\_forever_\Interface\AddOns`.
+Copy the `ProcFlash` folder into `World of Warcraft\_forever_\Interface\AddOns`.
 
 ## Tests
 
-`python tests/test_procalert.py` runs the addon against a fake game (needs `pip install lupa`).
+`python tests/test_procflash.py` runs the addon against a fake game (needs `pip install lupa`).
+
+## License
+
+MIT (see `LICENSE`).

@@ -1,10 +1,10 @@
-"""Run ProcAlert in Lua 5.1 against a fake WoW Forever client.
+"""Run ProcFlash in Lua 5.1 against a fake WoW Forever client.
 
 The fake has only the modern spell API (C_Spell, C_SpellBook, C_UnitAuras), like
 WoW Forever, and can make answers "secret" the way the client does in combat.
 
 Needs lupa (Lua for Python):  pip install lupa
-    python tests/test_procalert.py        # or: python -m pytest tests
+    python tests/test_procflash.py        # or: python -m pytest tests
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 
-ADDON = Path(__file__).resolve().parent.parent / "ProcAlert"
+ADDON = Path(__file__).resolve().parent.parent / "ProcFlash"
 
 try:
     lua51 = importlib.import_module("lupa.lua51")
@@ -121,7 +121,10 @@ C_SpellBook = {
 C_SpellActivationOverlay = { IsSpellOverlayed = function(id) return W.glow[id] or false end }
 C_UnitAuras = {
   GetPlayerAuraBySpellID = function(id) return W.auras[id] end,
-  GetAuraDataByIndex = function() return nil end,
+  GetAuraDataByIndex = function()
+    if W.aurasLocked then error("GetAuraDataByIndex(): Auras cannot be accessed when secret while tainted by 'ProcFlash'") end
+    return nil
+  end,
 }
 
 function learn(name, id) W.book[#W.book + 1] = { name, id } end
@@ -129,9 +132,9 @@ function fire(event, arg)
   local f = W.events[event]
   f.scripts.OnEvent(f, event, arg)
 end
-function tick() ProcAlert.anchor.scripts.OnUpdate(ProcAlert.anchor, 0.1) end
-function showing() return table.concat(ProcAlert:Showing(), ",") end
-function slash(msg) SlashCmdList.PROCALERT(msg) end
+function tick() ProcFlash.anchor.scripts.OnUpdate(ProcFlash.anchor, 0.1) end
+function showing() return table.concat(ProcFlash:Showing(), ",") end
+function slash(msg) SlashCmdList.PROCFLASH(msg) end
 function click(button) button.scripts.OnClick(button) end
 function drag(frame, x, y)
   frame.scripts.OnMouseDown(frame, "LeftButton")
@@ -159,10 +162,10 @@ def game(cls="WARRIOR", book=FEEBLE, saved=None):
         g.learn(name, spell_id)
     if saved is not None:
         lua.execute(saved)
-    src = (ADDON / "ProcAlert.lua").read_text(encoding="utf-8")
-    chunk = lua.eval("loadstring")(src, "@ProcAlert.lua")
-    chunk("ProcAlert", lua.table())
-    g.fire("ADDON_LOADED", "ProcAlert")
+    src = (ADDON / "ProcFlash.lua").read_text(encoding="utf-8")
+    chunk = lua.eval("loadstring")(src, "@ProcFlash.lua")
+    chunk("ProcFlash", lua.table())
+    g.fire("ADDON_LOADED", "ProcFlash")
     g.fire("PLAYER_LOGIN")
     g.tick()
     return lua, g, W
@@ -173,13 +176,13 @@ def chat(W):
 
 
 def names(g):
-    return [p.name for p in g.ProcAlert.known.values()]
+    return [p.name for p in g.ProcFlash.known.values()]
 
 
 def test_finds_feebles_moves_in_the_spellbook_at_their_highest_rank():
     lua, g, W = game()
     assert names(g) == ["Overpower", "Revenge"]
-    spells = [p.spell for p in g.ProcAlert.known.values()]
+    spells = [p.spell for p in g.ProcFlash.known.values()]
     assert spells == [OVERPOWER, REVENGE]
     assert not any("none of the procs" in m for m in chat(W))
 
@@ -200,7 +203,7 @@ def test_the_icon_says_the_procs_name():
     lua.execute('GameFontNormal = { GetFont = function() return "Fonts/FRIZQT__.TTF", 12 end }')
     W.usable[REVENGE] = True
     g.tick()
-    icon = g.ProcAlert.icons[2]
+    icon = g.ProcFlash.icons[2]
     assert g.showing() == "Revenge"
     assert icon.name.text == "Revenge"
     assert list(icon.name.textColor.values()) == [0.85, 0.85, 0.88]   # silver
@@ -215,12 +218,12 @@ def test_every_proc_shows_in_the_same_spot_one_at_a_time():
     W.usable[EXECUTE] = True
     g.tick()
     assert g.showing() == "Execute"
-    assert g.ProcAlert.icons[3].point[4] == 0   # same spot as the others
+    assert g.ProcFlash.icons[3].point[4] == 0   # same spot as the others
     W.usable[REVENGE] = True                    # two up at once: the first listed wins
     g.tick()
     assert g.showing() == "Revenge"
-    assert g.ProcAlert.icons[2].point[4] == 0
-    assert g.ProcAlert.anchor.w == 48
+    assert g.ProcFlash.icons[2].point[4] == 0
+    assert g.ProcFlash.anchor.w == 48
 
 
 def test_cooldown_hides_it_but_the_global_cooldown_does_not():
@@ -280,10 +283,10 @@ def test_needs_a_live_enemy_target_and_goes_red_out_of_range():
     W.range[OVERPOWER] = False
     g.tick()
     assert g.showing() == "Overpower"
-    assert g.ProcAlert.icons[1].tex.color[2] < 1      # tinted red
+    assert g.ProcFlash.icons[1].tex.color[2] < 1      # tinted red
     W.range[OVERPOWER] = True
     g.tick()
-    assert g.ProcAlert.icons[1].tex.color[2] == 1
+    assert g.ProcFlash.icons[1].tex.color[2] == 1
     W.target = W.enemy = W.targetDead = g.SECRET      # can't tell: don't hide it
     g.tick()
     assert g.showing() == "Overpower"
@@ -312,33 +315,45 @@ def test_druid_clearcasting_buff():
     assert g.showing() == "Clearcasting"
 
 
+def test_buff_list_locked_in_combat_is_not_an_error():
+    lua, g, W = game(cls="DRUID", book=())
+    W.target = None
+    W.aurasLocked = True                        # the client refuses buff-list scans in combat
+    g.tick()
+    assert g.showing() == ""
+    assert not any("went wrong" in m for m in chat(W))
+    W.auras[16870] = lua.table(name="Clearcasting")
+    g.tick()
+    assert g.showing() == "Clearcasting"
+
+
 def test_other_classes_get_nothing_and_no_box():
     lua, g, W = game(cls="PRIEST", book=())
-    assert g.ProcAlert.anchor.shown is False
-    assert not any("type /proc" in m for m in chat(W))
+    assert g.ProcFlash.anchor.shown is False
+    assert not any("type /procflash" in m for m in chat(W))
     g.slash("help")
     assert "none of the procs" in chat(W)[-1]
     g.slash("")                                 # the window still opens, and says so
-    assert g.ProcAlertOptions.none.shown is True
+    assert g.ProcFlashOptions.none.shown is True
 
 
 def test_edit_mode_shows_the_box_to_drag():
     lua, g, W = game()
-    assert any("type /proc" in m for m in chat(W))         # first login tells you how
-    assert g.ProcAlert.backdrop.shown is False
+    assert any("type /procflash" in m for m in chat(W))         # first login tells you how
+    assert g.ProcFlash.backdrop.shown is False
     W.callbacks["EditMode.Enter"]()
     g.tick()
     assert g.showing() == "Overpower"           # one icon, so you see what you're placing
-    assert g.ProcAlert.backdrop.shown is True
-    assert g.ProcAlert.label.text == "ProcAlert"
-    assert g.ProcAlert.anchor.mouse is True     # draggable
-    g.drag(g.ProcAlert.anchor, 300, 200)
+    assert g.ProcFlash.backdrop.shown is True
+    assert g.ProcFlash.label.text == "ProcFlash"
+    assert g.ProcFlash.anchor.mouse is True     # draggable
+    g.drag(g.ProcFlash.anchor, 300, 200)
     W.callbacks["EditMode.Exit"]()
     g.tick()
     assert g.showing() == ""
-    assert g.ProcAlert.backdrop.shown is False
-    assert g.ProcAlert.anchor.mouse is False    # clicks go through to the game
-    db = g.ProcAlertDB
+    assert g.ProcFlash.backdrop.shown is False
+    assert g.ProcFlash.anchor.mouse is False    # clicks go through to the game
+    db = g.ProcFlashDB
     assert list(db.point.values()) == ["TOPLEFT", "BOTTOMLEFT", 300, 200]
     assert db.placed is True
 
@@ -348,32 +363,32 @@ def test_slash_move_and_lock_still_work_and_settings_are_saved():
     g.slash("move")
     g.tick()
     assert g.showing() == "Overpower"
-    assert "/proc lock" in g.ProcAlert.label.text
+    assert "/procflash lock" in g.ProcFlash.label.text
     g.slash("lock")
     g.slash("size 64")
     g.slash("sound")
     g.tick()
     assert g.showing() == ""
-    db = g.ProcAlertDB
+    db = g.ProcFlashDB
     assert db.size == 64 and db.sound is True and db.locked is True and db.placed is True
 
-    lua2, g2, W2 = game(saved="ProcAlertDB = { point = {'TOPLEFT','BOTTOMLEFT',300,200}, "
+    lua2, g2, W2 = game(saved="ProcFlashDB = { point = {'TOPLEFT','BOTTOMLEFT',300,200}, "
                               "size = 64, locked = true, placed = true, sound = true, off = {} }")
-    assert list(g2.ProcAlert.anchor.point.values())[2:] == ["BOTTOMLEFT", 300, 200]
-    assert not any("type /proc" in m for m in chat(W2))    # already placed
+    assert list(g2.ProcFlash.anchor.point.values())[2:] == ["BOTTOMLEFT", 300, 200]
+    assert not any("type /procflash" in m for m in chat(W2))    # already placed
     W2.usable[OVERPOWER] = True
     g2.tick()
-    assert g2.ProcAlert.icons[1].w == 64
+    assert g2.ProcFlash.icons[1].w == 64
     assert W2.sounds == 1
     g2.tick()
     assert W2.sounds == 1                       # once when it appears, not every check
 
 
 def test_settings_from_the_first_version_start_locked():
-    lua, g, W = game(saved="ProcAlertDB = { point = {'CENTER','CENTER',0,-150}, size = 48, "
+    lua, g, W = game(saved="ProcFlashDB = { point = {'CENTER','CENTER',0,-150}, size = 48, "
                            "locked = false, sound = false, off = {} }")
-    assert g.ProcAlertDB.locked is True
-    assert g.ProcAlert.backdrop.shown is False
+    assert g.ProcFlashDB.locked is True
+    assert g.ProcFlash.backdrop.shown is False
 
 
 def test_turn_one_off_by_name():
@@ -392,7 +407,7 @@ def test_turn_one_off_by_name():
 
 
 def options(g):
-    return g.ProcAlertOptions
+    return g.ProcFlashOptions
 
 
 def test_slash_proc_opens_the_window_and_shows_the_box_to_move():
@@ -402,19 +417,19 @@ def test_slash_proc_opens_the_window_and_shows_the_box_to_move():
     assert f.shown is True
     g.tick()
     assert g.showing() == "Overpower"           # no Execute yet, and that's fine
-    assert g.ProcAlert.backdrop.shown is True
-    assert g.ProcAlert.anchor.mouse is True and g.ProcAlert.anchor.wheel is True
-    assert "drag" in g.ProcAlert.label.text
-    g.drag(g.ProcAlert.anchor, 420, 260)
-    assert list(g.ProcAlertDB.point.values()) == ["TOPLEFT", "BOTTOMLEFT", 420, 260]
+    assert g.ProcFlash.backdrop.shown is True
+    assert g.ProcFlash.anchor.mouse is True and g.ProcFlash.anchor.wheel is True
+    assert "drag" in g.ProcFlash.label.text
+    g.drag(g.ProcFlash.anchor, 420, 260)
+    assert list(g.ProcFlashDB.point.values()) == ["TOPLEFT", "BOTTOMLEFT", 420, 260]
     click = g.click
     click(f.done)
     assert f.shown is False
     g.tick()
     assert g.showing() == ""
-    assert g.ProcAlert.anchor.mouse is False
-    assert g.ProcAlertDB.placed is True and g.ProcAlertDB.locked is True
-    g.slash("")                                 # /proc again opens it again
+    assert g.ProcFlash.anchor.mouse is False
+    assert g.ProcFlashDB.placed is True and g.ProcFlashDB.locked is True
+    g.slash("")                                 # /procflash again opens it again
     assert f.shown is True
     g.slash("")                                 # and once more closes it
     assert f.shown is False
@@ -427,19 +442,19 @@ def test_window_resizes_the_icons():
     assert f.slider.value == 48 and f.sizeValue.text == "48 px"
     f.slider.SetValue(f.slider, 72)             # drag the slider
     g.tick()
-    assert g.ProcAlertDB.size == 72
-    assert g.ProcAlert.icons[1].w == 72
-    assert g.ProcAlert.anchor.w == 72
-    g.ProcAlert.anchor.scripts.OnMouseWheel(g.ProcAlert.anchor, -1)   # scroll down
-    assert g.ProcAlertDB.size == 68
+    assert g.ProcFlashDB.size == 72
+    assert g.ProcFlash.icons[1].w == 72
+    assert g.ProcFlash.anchor.w == 72
+    g.ProcFlash.anchor.scripts.OnMouseWheel(g.ProcFlash.anchor, -1)   # scroll down
+    assert g.ProcFlashDB.size == 68
     assert f.slider.value == 68 and f.sizeValue.text == "68 px"
     for _ in range(100):
-        g.ProcAlert.anchor.scripts.OnMouseWheel(g.ProcAlert.anchor, -1)
-    assert g.ProcAlertDB.size == 16             # never smaller than 16
+        g.ProcFlash.anchor.scripts.OnMouseWheel(g.ProcFlash.anchor, -1)
+    assert g.ProcFlashDB.size == 16             # never smaller than 16
     click = g.click
     click(f.reset)
-    assert g.ProcAlertDB.size == 48
-    assert list(g.ProcAlertDB.point.values()) == ["CENTER", "CENTER", 0, -150]
+    assert g.ProcFlashDB.size == 48
+    assert list(g.ProcFlashDB.point.values()) == ["CENTER", "CENTER", 0, -150]
 
 
 def test_window_turns_procs_and_sound_on_and_off():
@@ -459,7 +474,7 @@ def test_window_turns_procs_and_sound_on_and_off():
     g.tick()
     assert g.showing() == "Overpower"
     assert W.sounds == 1
-    assert g.ProcAlertDB.off.revenge is True
+    assert g.ProcFlashDB.off.revenge is True
     g.slash("revenge")                          # typed toggles show in the window too
     g.slash("")
     assert f.checks[2].checked is True
@@ -477,7 +492,7 @@ def test_learning_a_move_while_the_window_is_open_adds_its_box():
 
 def test_it_loads_on_a_client_without_the_old_events():
     lua, g, W = game()
-    assert g.ProcAlertDB is not None and g.ProcAlert.db is not None
+    assert g.ProcFlashDB is not None and g.ProcFlash.db is not None
     assert set(W.events.keys()) == {"ADDON_LOADED", "PLAYER_LOGIN", "SPELLS_CHANGED",
                                     "LEARNED_SPELL_IN_SKILL_LINE", "PLAYER_TALENT_UPDATE"}
     assert not any("went wrong" in m for m in chat(W))

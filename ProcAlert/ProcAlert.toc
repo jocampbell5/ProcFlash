@@ -1,8 +1,0 @@
-## Interface: 16001
-## Title: ProcAlert
-## Notes: Shows an icon the moment Overpower, Revenge, Execute, Clearcasting and other procs are ready to use. /proc to move it.
-## Author: jocampbell5
-## Version: 0.1.0
-## SavedVariables: ProcAlertDB
-
-ProcAlert.lua
